@@ -18,6 +18,7 @@ cask "ai-pet-usage" do
 
   zap trash: [
     "~/Library/Application Support/AIPetUsage",
+    "~/Library/LaunchAgents/dev.aipetusage.app.report.plist",
     "~/Library/Preferences/dev.aipetusage.app.plist",
   ]
 
