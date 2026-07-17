@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: App bug or feature request (ai-pet-usage)
+    url: https://github.com/F-e-u-e-r/ai-pet-usage/issues/new/choose
+    about: The tap only distributes the app — report app behavior there.
+  - name: Report a security vulnerability (private)
+    url: https://github.com/F-e-u-e-r/homebrew-tap/security/advisories/new
+    about: Report security issues privately via GitHub security advisories. Do not open a public issue.

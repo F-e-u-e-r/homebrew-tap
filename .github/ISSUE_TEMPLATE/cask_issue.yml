@@ -1,0 +1,42 @@
+name: Cask install / upgrade issue
+description: brew install, upgrade, or uninstall of a cask from this tap fails.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This tap only packages the app. Bugs in the app itself (menu-bar
+        behavior, usage numbers, the pet) belong in
+        [ai-pet-usage issues](https://github.com/F-e-u-e-r/ai-pet-usage/issues/new/choose).
+        macOS blocking the first launch is expected for the ad-hoc-signed
+        alpha — see the README for the Open Anyway steps.
+  - type: dropdown
+    id: cask
+    attributes:
+      label: Cask
+      options:
+        - ai-pet-usage
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command and full output
+      description: The exact brew command and everything it printed.
+      render: shell
+    validations:
+      required: true
+  - type: input
+    id: brew-version
+    attributes:
+      label: Homebrew version
+      description: First line of `brew --version`.
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version and chip
+      placeholder: e.g. macOS 15.5, Apple Silicon (M2)
+    validations:
+      required: true
