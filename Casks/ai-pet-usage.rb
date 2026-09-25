@@ -1,6 +1,6 @@
 cask "ai-pet-usage" do
-  version "0.2.0"
-  sha256 "509b13c3694ddc94fb01f8d5b6a39a3daddea105258e61b9c19c5a1947f0a6c1"
+  version "0.3.0"
+  sha256 "87e4a061588bb8b101fd84929e15d0b15c77fe5facb0f810d06395b82f636c8a"
 
   url "https://github.com/F-e-u-e-r/ai-pet-usage/releases/download/alpha-v#{version}/AI-Pet-Usage-alpha-v#{version}-arm64.zip",
       verified: "github.com/F-e-u-e-r/ai-pet-usage/"
