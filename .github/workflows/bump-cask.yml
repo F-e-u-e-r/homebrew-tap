@@ -1,5 +1,17 @@
-# Tap-local auto-bump: polls the app repo's latest alpha release and updates the
-# cask (version + sha256) using THIS repo's own GITHUB_TOKEN — no cross-repo token.
+# Tap-local auto-bump for the ai-pet-usage cask, using THIS repo's own GITHUB_TOKEN (no cross-repo token).
+# The procedure lives in scripts/bump-cask.sh (tested end-to-end by scripts/test-bump.sh); summary:
+#
+# Selection (scripts/select-release.jq; contract = docs/release/VERSIONING.md in F-e-u-e-r/ai-pet-usage):
+# the highest canonical release whose channel is beta, rc or stable (alpha excluded), by canonical semantic
+# ordering — never publication time or string order. Legacy alpha-v* tags are never selected; with no
+# eligible canonical release the cask is left unchanged (no fallback).
+# Candidates: every non-draft release, listed with a bound of 1000 (`gh release list --limit 1001`: a listing
+# over the bound is known to be incomplete and fails the run — the bound the app's release workflow also uses).
+# The release must carry exactly one matching asset with a well-formed
+# "sha256:<hex>" API digest (scripts/release-asset.sh) — validated before any shortcut — and the download
+# must match it (scripts/verify-asset.sh). version, sha256 and url are rewritten together
+# (scripts/update-cask.sh, which also checks the cask with `ruby -c`), so the first canonical bump also
+# migrates the legacy alpha-v#{version} URL. Nothing is downloaded or committed when the cask is current.
 name: bump-cask
 on:
   schedule:
@@ -12,26 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Bump cask to latest ai-pet-usage alpha release
+      - name: Bump cask to the highest eligible canonical ai-pet-usage release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          REPO="F-e-u-e-r/ai-pet-usage"
-          TAG=$(gh release list --repo "$REPO" --limit 30 \
-                  --json tagName,isDraft,isPrerelease,publishedAt \
-                  --jq 'map(select(.isDraft|not)) | map(select(.tagName|startswith("alpha-v"))) | sort_by(.publishedAt) | reverse | (.[0].tagName // "")')
-          if [ -z "$TAG" ]; then echo "no alpha-v* release found"; exit 0; fi
-          VERSION="${TAG#alpha-v}"
-          URL="https://github.com/${REPO}/releases/download/${TAG}/AI-Pet-Usage-${TAG}-arm64.zip"
-          CASK="Casks/ai-pet-usage.rb"
-          CUR=$(sed -nE 's/^  version "(.*)"/\1/p' "$CASK" | head -1)
-          if [ "$CUR" = "$VERSION" ]; then echo "cask already at $VERSION"; exit 0; fi
-          SHA=$(curl -fsSL "$URL" | sha256sum | awk '{print $1}')
-          [ -n "$SHA" ] || { echo "failed to hash $URL"; exit 1; }
-          sed -i -E "s/^  version \"[^\"]+\"/  version \"${VERSION}\"/" "$CASK"
-          sed -i -E "s/^  sha256 \"[0-9a-f]+\"/  sha256 \"${SHA}\"/" "$CASK"
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -am "ai-pet-usage ${VERSION}"
-          git push
+        run: bash scripts/bump-cask.sh
