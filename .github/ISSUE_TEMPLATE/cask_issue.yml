@@ -9,7 +9,7 @@ body:
         behavior, usage numbers, the pet) belong in
         [ai-pet-usage issues](https://github.com/F-e-u-e-r/ai-pet-usage/issues/new/choose).
         macOS blocking the first launch is expected for the ad-hoc-signed
-        alpha — see the README for the Open Anyway steps.
+        build — see the README for the Open Anyway steps.
   - type: dropdown
     id: cask
     attributes:

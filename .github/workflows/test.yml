@@ -1,0 +1,18 @@
+# Tests for the canonical cask bump (scripts/test-bump.sh): selector parity with the app repo's frozen
+# version vectors, selection policy, asset and digest extraction, cask rewrite, download verification, the whole
+# bump end-to-end (stubbed gh / curl, throwaway git repo) and bump-cask.yml wiring. ubuntu-latest provides jq,
+# ruby and git.
+name: test
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  bump-tooling:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bump tooling tests
+        run: bash scripts/test-bump.sh
