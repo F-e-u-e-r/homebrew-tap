@@ -1,8 +1,8 @@
 cask "ai-pet-usage" do
-  version "0.4.0"
-  sha256 "b5008d850d116b1150ac11b70562cdcda876a3dac90bfe74b920cfbffff3f9ab"
+  version "0.1.0-beta.2"
+  sha256 "5f35904adff5eb6c8f06278f3d69c57ae70aa6e4ccf3ce33ecfd78d15e563e6f"
 
-  url "https://github.com/F-e-u-e-r/ai-pet-usage/releases/download/alpha-v#{version}/AI-Pet-Usage-alpha-v#{version}-arm64.zip",
+  url "https://github.com/F-e-u-e-r/ai-pet-usage/releases/download/v#{version}/AI-Pet-Usage-v#{version}-arm64.zip",
       verified: "github.com/F-e-u-e-r/ai-pet-usage/"
   name "AI Pet Usage"
   desc "Menu bar pet that reacts to AI usage"
