@@ -15,6 +15,8 @@ VER="$ROOT/scripts/verify-asset.sh"
 ASSETX="$ROOT/scripts/release-asset.sh"
 BUMP="$ROOT/scripts/bump-cask.sh"
 CASK="$ROOT/Casks/ai-pet-usage.rb"
+FIX_LEGACY="$ROOT/tests/fixtures/cask-legacy.rb"
+FIX_CANONICAL="$ROOT/tests/fixtures/cask-canonical.rb"
 WF="$ROOT/.github/workflows/bump-cask.yml"
 VECTORS="$ROOT/tests/canonical-version-vectors.tsv"
 VECTORS_SHA256="12b6b1d6eeba01ba3d3fd6c41c5f618b59b019bfb7432f9c5fecbd9733539b1b"
@@ -132,52 +134,96 @@ rc=$?
 if [ "$rc" -ne 0 ] && [ -z "$out" ]; then ok; else bad "a non-array input must be an error, not 'no eligible release' (exit $rc, out [$out])"; fi
 
 # ---------------------------------------------------------------- 3. cask rewrite (H10, H11, H13, H14)
+# The rewrite contract is exercised against two DEDICATED, frozen fixtures — a legacy (alpha-v#{version}) cask and an
+# already-canonical (v#{version}) cask — never against whatever state the live production cask happens to be in. The two
+# migration states are kept explicit (a first migration changes three stanza lines; every bump after it changes two),
+# so the suite stays valid both before the first canonical Homebrew migration and after the production cask is already
+# canonical. The real update-cask.sh performs every rewrite; the transformation is never reimplemented here.
 SHA_A="$(printf 'a%.0s' $(seq 1 64))"
 SHA_B="$(printf 'b%.0s' $(seq 1 64))"
-cp "$CASK" "$TMP/cask.rb"
-bash "$UPD" --check "$TMP/cask.rb" 0.1.0-beta.1 "$SHA_A"; check "H13 --check before rewrite needs work" "$?" 1
-bash "$UPD" "$TMP/cask.rb" 0.1.0-beta.1 "$SHA_A"; check "H11 rewrite exit" "$?" 0
-diff "$CASK" "$TMP/cask.rb" > "$TMP/cask.diff"
-check "H11 exactly three lines replaced" "$(grep -c '^< ' "$TMP/cask.diff") $(grep -c '^> ' "$TMP/cask.diff")" "3 3"
-check "H11 version line" "$(grep -c '^  version "0.1.0-beta.1"$' "$TMP/cask.rb")" 1
-check "H11 sha256 line" "$(grep -c "^  sha256 \"$SHA_A\"$" "$TMP/cask.rb")" 1
-check "H11 url line is the canonical template" \
-    "$(grep -cF '  url "https://github.com/F-e-u-e-r/ai-pet-usage/releases/download/v#{version}/AI-Pet-Usage-v#{version}-arm64.zip",' "$TMP/cask.rb")" 1
-check "H11 no legacy alpha-v left" "$(grep -c 'alpha-v' "$TMP/cask.rb")" 0
-check "H11 verified: stanza untouched" "$(grep -cF '      verified: "github.com/F-e-u-e-r/ai-pet-usage/"' "$TMP/cask.rb")" 1
-url_line="$(grep -E '^  url "' "$TMP/cask.rb")"
-url="${url_line#  url \"}"
-url="${url%\",}"
-check "H10 interpolated URL is mechanically derived from the tag" "${url//\#\{version\}/0.1.0-beta.1}" \
+
+# -- Case A: legacy -> canonical migration (the first canonical bump) --------------------------------------------------
+# The fixture starts legacy; one bump must change version + sha256 AND migrate the url template alpha-v#{version} ->
+# v#{version}, i.e. exactly three stanza lines.
+check "A fixture is legacy (alpha-v url template present)" \
+    "$(grep -cF 'download/alpha-v#{version}/AI-Pet-Usage-alpha-v#{version}-arm64.zip' "$FIX_LEGACY")" 1
+check "A fixture has no canonical v#{version} url yet" \
+    "$(grep -cF 'download/v#{version}/AI-Pet-Usage-v#{version}-arm64.zip' "$FIX_LEGACY")" 0
+cp "$FIX_LEGACY" "$TMP/caskA.rb"
+bash "$UPD" --check "$TMP/caskA.rb" 0.1.0-beta.1 "$SHA_A"; check "A H13 --check before migration needs work" "$?" 1
+bash "$UPD" "$TMP/caskA.rb" 0.1.0-beta.1 "$SHA_A"; check "A H11 migration rewrite exit" "$?" 0
+diff "$FIX_LEGACY" "$TMP/caskA.rb" > "$TMP/caskA.diff"
+check "A H11 legacy->canonical changes exactly three stanza lines" \
+    "$(grep -c '^< ' "$TMP/caskA.diff") $(grep -c '^> ' "$TMP/caskA.diff")" "3 3"
+check "A H11 version line" "$(grep -c '^  version "0.1.0-beta.1"$' "$TMP/caskA.rb")" 1
+check "A H11 sha256 line" "$(grep -c "^  sha256 \"$SHA_A\"$" "$TMP/caskA.rb")" 1
+check "A H11 url migrated to the canonical template" \
+    "$(grep -cF '  url "https://github.com/F-e-u-e-r/ai-pet-usage/releases/download/v#{version}/AI-Pet-Usage-v#{version}-arm64.zip",' "$TMP/caskA.rb")" 1
+check "A H11 no legacy alpha-v left" "$(grep -c 'alpha-v' "$TMP/caskA.rb")" 0
+check "A H11 verified: stanza untouched" "$(grep -cF '      verified: "github.com/F-e-u-e-r/ai-pet-usage/"' "$TMP/caskA.rb")" 1
+urlA_line="$(grep -E '^  url "' "$TMP/caskA.rb")"; urlA="${urlA_line#  url \"}"; urlA="${urlA%\",}"
+check "A H10 interpolated URL is mechanically derived from the tag" "${urlA//\#\{version\}/0.1.0-beta.1}" \
     "https://github.com/F-e-u-e-r/ai-pet-usage/releases/download/v0.1.0-beta.1/AI-Pet-Usage-v0.1.0-beta.1-arm64.zip"
-bash "$UPD" --check "$TMP/cask.rb" 0.1.0-beta.1 "$SHA_A"; check "H13 --check after rewrite is current" "$?" 0
-cp "$TMP/cask.rb" "$TMP/cask.again.rb"
-bash "$UPD" "$TMP/cask.again.rb" 0.1.0-beta.1 "$SHA_A"
-if cmp -s "$TMP/cask.rb" "$TMP/cask.again.rb"; then ok; else bad "H13 rewrite is not idempotent"; fi
-bash "$UPD" --check "$TMP/cask.rb" 0.1.0-beta.1 "$SHA_B"; check "H13 --check: same version + url, new sha256 (re-upload) needs work" "$?" 1
-bash "$UPD" "$TMP/cask.rb" 0.1.0 "$SHA_B"; check "H14 stable rewrite exit" "$?" 0
-check "H14 stable version line" "$(grep -c '^  version "0.1.0"$' "$TMP/cask.rb")" 1
-check "H14 stable sha256 line" "$(grep -c "^  sha256 \"$SHA_B\"$" "$TMP/cask.rb")" 1
-check "H14 stable url line is the canonical template" \
-    "$(grep -cF '  url "https://github.com/F-e-u-e-r/ai-pet-usage/releases/download/v#{version}/AI-Pet-Usage-v#{version}-arm64.zip",' "$TMP/cask.rb")" 1
-stable_url_line="$(grep -E '^  url "' "$TMP/cask.rb")"
-stable_url="${stable_url_line#  url \"}"
-stable_url="${stable_url%\",}"
-check "H14 stable interpolated URL (read back from the rewritten file)" "${stable_url//\#\{version\}/0.1.0}" \
+bash "$UPD" --check "$TMP/caskA.rb" 0.1.0-beta.1 "$SHA_A"; check "A H13 --check after migration is current" "$?" 0
+cp "$TMP/caskA.rb" "$TMP/caskA.again.rb"
+bash "$UPD" "$TMP/caskA.again.rb" 0.1.0-beta.1 "$SHA_A"
+if cmp -s "$TMP/caskA.rb" "$TMP/caskA.again.rb"; then ok; else bad "A H13 rewrite is not idempotent"; fi
+bash "$UPD" --check "$TMP/caskA.rb" 0.1.0-beta.1 "$SHA_B"; check "A H13 --check: same version + url, new sha256 (re-upload) needs work" "$?" 1
+
+# -- Case B: canonical -> canonical steady state (every bump after the migration) --------------------------------------
+# The fixture is already canonical; a bump to another canonical version must change ONLY version + sha256 (two stanza
+# lines) and leave the canonical url template in place — the alpha-v form must never reappear.
+check "B fixture is canonical (v#{version} url template present)" \
+    "$(grep -cF 'download/v#{version}/AI-Pet-Usage-v#{version}-arm64.zip' "$FIX_CANONICAL")" 1
+check "B fixture has no legacy alpha-v anywhere" "$(grep -c 'alpha-v' "$FIX_CANONICAL")" 0
+cp "$FIX_CANONICAL" "$TMP/caskB.rb"
+bash "$UPD" --check "$TMP/caskB.rb" 0.1.0-beta.2 "$SHA_B"; check "B H13 --check before bump needs work" "$?" 1
+bash "$UPD" "$TMP/caskB.rb" 0.1.0-beta.2 "$SHA_B"; check "B H11 steady-state rewrite exit" "$?" 0
+diff "$FIX_CANONICAL" "$TMP/caskB.rb" > "$TMP/caskB.diff"
+check "B H11 canonical->canonical changes exactly two stanza lines" \
+    "$(grep -c '^< ' "$TMP/caskB.diff") $(grep -c '^> ' "$TMP/caskB.diff")" "2 2"
+check "B H11 version line" "$(grep -c '^  version "0.1.0-beta.2"$' "$TMP/caskB.rb")" 1
+check "B H11 sha256 line" "$(grep -c "^  sha256 \"$SHA_B\"$" "$TMP/caskB.rb")" 1
+check "B H11 url template unchanged (still canonical)" \
+    "$(grep -cF '  url "https://github.com/F-e-u-e-r/ai-pet-usage/releases/download/v#{version}/AI-Pet-Usage-v#{version}-arm64.zip",' "$TMP/caskB.rb")" 1
+check "B H11 no alpha-v reappears" "$(grep -c 'alpha-v' "$TMP/caskB.rb")" 0
+check "B H11 verified: stanza untouched" "$(grep -cF '      verified: "github.com/F-e-u-e-r/ai-pet-usage/"' "$TMP/caskB.rb")" 1
+bash "$UPD" --check "$TMP/caskB.rb" 0.1.0-beta.2 "$SHA_B"; check "B H13 --check after bump is current" "$?" 0
+# H14: a stable (no-prerelease) canonical version is also a canonical->canonical bump and keeps the v#{version} template.
+bash "$UPD" "$TMP/caskB.rb" 0.1.0 "$SHA_A"; check "B H14 stable rewrite exit" "$?" 0
+check "B H14 stable version line" "$(grep -c '^  version "0.1.0"$' "$TMP/caskB.rb")" 1
+check "B H14 stable sha256 line" "$(grep -c "^  sha256 \"$SHA_A\"$" "$TMP/caskB.rb")" 1
+check "B H14 stable url line is the canonical template" \
+    "$(grep -cF '  url "https://github.com/F-e-u-e-r/ai-pet-usage/releases/download/v#{version}/AI-Pet-Usage-v#{version}-arm64.zip",' "$TMP/caskB.rb")" 1
+stable_url_line="$(grep -E '^  url "' "$TMP/caskB.rb")"; stable_url="${stable_url_line#  url \"}"; stable_url="${stable_url%\",}"
+check "B H14 stable interpolated URL (read back from the rewritten file)" "${stable_url//\#\{version\}/0.1.0}" \
     "https://github.com/F-e-u-e-r/ai-pet-usage/releases/download/v0.1.0/AI-Pet-Usage-v0.1.0-arm64.zip"
-bash "$UPD" --check "$TMP/cask.rb" 0.1.0 "$SHA_B"; check "H13 --check after the stable rewrite is current" "$?" 0
-cp "$CASK" "$TMP/guard.rb"
+bash "$UPD" --check "$TMP/caskB.rb" 0.1.0 "$SHA_A"; check "B H13 --check after the stable rewrite is current" "$?" 0
+
+# -- The real production cask stays rewritable, in WHATEVER state it currently is --------------------------------------
+# State-independent: it must be valid and carry exactly one rewritable version/sha256/url stanza, so any bump lands a
+# canonical cask — asserted WITHOUT a line-count oracle, so it passes whether the live cask is still legacy or already
+# migrated. The real file is only ever copied; §7 re-checks that its bytes are untouched.
+cp "$CASK" "$TMP/real.rb"
+bash "$UPD" "$TMP/real.rb" 0.1.0-beta.1 "$SHA_A"; check "real production cask is update-cask-rewritable" "$?" 0
+check "real cask ends on the canonical url template" \
+    "$(grep -cF '  url "https://github.com/F-e-u-e-r/ai-pet-usage/releases/download/v#{version}/AI-Pet-Usage-v#{version}-arm64.zip",' "$TMP/real.rb")" 1
+check "real cask has no alpha-v after a rewrite" "$(grep -c 'alpha-v' "$TMP/real.rb")" 0
+
+# -- Guards: bad args leave the cask untouched (exit 2); the oracle is state-independent -------------------------------
+cp "$FIX_CANONICAL" "$TMP/guard.rb"
+cp "$TMP/guard.rb" "$TMP/guard.orig"
 for badargs in "v0.1.0-beta.1|$SHA_A" "0.1.0-beta.0|$SHA_A" "alpha-v0.4.0|$SHA_A" "0.1.0-beta.1|ABC" "0.1.0-beta.1|"; do
     IFS='|' read -r v s <<< "$badargs"
     bash "$UPD" "$TMP/guard.rb" "$v" "$s" 2>/dev/null; check "update-cask rejects [$badargs]" "$?" 2
 done
-if cmp -s "$CASK" "$TMP/guard.rb"; then ok; else bad "rejected update-cask runs must leave the cask untouched"; fi
+if cmp -s "$TMP/guard.orig" "$TMP/guard.rb"; then ok; else bad "rejected update-cask runs must leave the cask untouched"; fi
 printf 'cask "x" do\n  version "1"\n  version "2"\n  sha256 "%s"\n  url "https://github.com/F-e-u-e-r/ai-pet-usage/releases/download/x",\nend\n' "$SHA_A" > "$TMP/dup.rb"
 cp "$TMP/dup.rb" "$TMP/dup.orig"
 bash "$UPD" "$TMP/dup.rb" 0.1.0 "$SHA_A" 2>/dev/null; check "update-cask refuses duplicate target lines" "$?" 2
 if cmp -s "$TMP/dup.rb" "$TMP/dup.orig"; then ok; else bad "duplicate-line refusal modified the file"; fi
 # Malformed casks: an extra stanza in any form, or invalid Ruby, is refused in both modes; the file is untouched.
-cp "$TMP/cask.again.rb" "$TMP/current.rb"   # a valid, current 0.1.0-beta.1 / SHA_A cask
+cp "$TMP/caskA.rb" "$TMP/current.rb"   # a valid, current 0.1.0-beta.1 / SHA_A cask
 bash "$UPD" --check "$TMP/current.rb" 0.1.0-beta.1 "$SHA_A"; check "fixture: current cask --check" "$?" 0
 for extra in '  url "https://example.invalid/other.zip"' '    version "9"' '  sha256 :no_check' \
              '  url("https://example.invalid/other.zip")' '  version("9")' "  sha256(\"$SHA_B\")" \
